@@ -2,201 +2,226 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>لوحة التحكم — حجوزاتي</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>حجوزاتي</title>
+  <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
   <link rel="stylesheet" href="/src/styles.css" />
 </head>
 <body>
-  <div class="container">
-    <header class="topbar">
-      <a class="logo" href="/">حجوزا<span>تي</span></a>
-      <nav>
-        <span id="biz-name" class="muted"></span>
-        <button id="logout" class="btn ghost sm">خروج</button>
-      </nav>
-    </header>
+  <!-- ============ Onboarding (first login, no business yet) ============ -->
+  <main class="auth" id="onboarding" hidden>
+    <form id="onb-form" novalidate>
+      <h1 class="large-title">جهّز مصلحتك</h1>
+      <p class="lede">دقيقة وحدة، وبعدها بتضيف الخدمات.</p>
 
-    <!-- ============ Onboarding (first login, no business yet) ============ -->
-    <section id="onboarding" class="narrow hidden" style="padding-top:0">
-      <div class="card">
-        <h1 style="font-size:1.4rem">أهلاً! خلّينا نجهّز مصلحتك</h1>
-        <form id="onb-form" novalidate>
-          <div class="field">
-            <label for="onb-name">اسم المصلحة</label>
-            <input id="onb-name" required maxlength="80" placeholder="مثلاً: صالون أحمد" />
+      <div class="group">
+        <div class="row field-row"><label for="onb-name">اسم المصلحة</label>
+          <input id="onb-name" maxlength="80" placeholder="صالون أحمد" required /></div>
+        <div class="row field-row"><label for="onb-category">المجال</label>
+          <select id="onb-category">
+            <option>صالون حلاقة</option><option>صالون تجميل</option><option>عيادة</option>
+            <option>مدرّب / مدرّبة</option><option>تصوير</option><option>كراج</option><option>أخرى</option>
+          </select></div>
+        <div class="row field-row"><label for="onb-staff">اسمك</label>
+          <input id="onb-staff" maxlength="60" placeholder="أول موظف بالمصلحة" required /></div>
+      </div>
+
+      <p class="section-label">رابط صفحة الحجز</p>
+      <div class="group">
+        <div class="row field-row"><label for="onb-slug" class="num" style="width:auto;color:var(--label-2)">/b/</label>
+          <input id="onb-slug" dir="ltr" maxlength="40" placeholder="ahmad-salon" autocapitalize="off" spellcheck="false" style="text-align:left" required /></div>
+      </div>
+      <p class="section-foot" id="onb-slug-hint">أحرف إنجليزية صغيرة، أرقام وشَرطة. هذا الرابط اللي بتشاركه مع زبائنك.</p>
+
+      <p class="section-label">واتساب المصلحة</p>
+      <div class="group">
+        <div class="row field-row"><label for="onb-phone">الجوال</label>
+          <input id="onb-phone" type="tel" inputmode="tel" dir="ltr" placeholder="050-000-0000" /></div>
+      </div>
+      <p class="section-foot">عليه بتوصلك رسالة مع كل حجز جديد. اختياري.</p>
+
+      <p id="onb-error" class="error" role="alert"></p>
+      <div class="actions"><button class="btn large block" type="submit">أنشئ المصلحة</button></div>
+    </form>
+  </main>
+
+  <!-- ============ Main dashboard ============ -->
+  <div class="dash" id="app" hidden>
+    <nav class="sidebar" id="tabs" aria-label="الأقسام">
+      <div class="brand">حجوزاتي</div>
+      <div class="biz-name" id="biz-name"></div>
+      <button class="side-item" data-tab="appointments" aria-current="page"><span data-icon="calendar"></span><span>المواعيد</span></button>
+      <button class="side-item" data-tab="services"><span data-icon="services"></span><span>الخدمات</span></button>
+      <button class="side-item" data-tab="staff"><span data-icon="people"></span><span>الموظفين</span></button>
+      <button class="side-item" data-tab="hours"><span data-icon="clock"></span><span>الساعات</span></button>
+      <button class="side-item" data-tab="settings"><span data-icon="gear"></span><span>الإعدادات</span></button>
+      <div class="spacer"></div>
+      <button class="side-item side-signout" id="logout"><span data-icon="signout"></span><span>تسجيل الخروج</span></button>
+    </nav>
+
+    <main class="main">
+      <!-- Appointments -->
+      <section class="tab" id="tab-appointments">
+        <div class="main-head">
+          <h1 class="large-title" id="appt-title">اليوم</h1>
+          <div class="toolbar">
+            <input id="appt-date" type="date" aria-label="اختر يوم" />
+            <button id="add-appt" class="btn small">موعد جديد</button>
           </div>
-          <div class="field">
-            <label for="onb-slug">رابط صفحة الحجز</label>
-            <input id="onb-slug" dir="ltr" required maxlength="40" placeholder="ahmad-salon" />
-            <div class="hint" id="onb-slug-hint">أحرف إنجليزية صغيرة، أرقام وشَرطة (-) فقط</div>
+        </div>
+        <p class="summary-line" id="stats"></p>
+        <ul class="group" id="appt-list"></ul>
+
+        <p class="section-label">رابط الحجز</p>
+        <div class="group">
+          <div class="row share-row">
+            <span class="grow"><code id="share-link"></code></span>
+            <button id="copy-link" class="btn small gray">نسخ</button>
+            <a id="open-link" class="btn small gray" target="_blank" rel="noopener">فتح</a>
           </div>
-          <div class="row">
-            <div class="field">
-              <label for="onb-phone">رقم واتساب المصلحة</label>
-              <input id="onb-phone" type="tel" dir="ltr" placeholder="050-1234567" />
-            </div>
-            <div class="field">
-              <label for="onb-category">المجال</label>
-              <select id="onb-category">
-                <option>صالون حلاقة</option>
-                <option>صالون تجميل</option>
-                <option>عيادة</option>
-                <option>مدرّب / مدرّبة</option>
-                <option>تصوير</option>
-                <option>كراج</option>
-                <option>أخرى</option>
-              </select>
-            </div>
+        </div>
+        <p class="section-foot">حطّه بالبايو على إنستغرام وبواتساب بزنس.</p>
+      </section>
+
+      <!-- Services -->
+      <section class="tab" id="tab-services" hidden>
+        <div class="main-head">
+          <h1 class="large-title">الخدمات</h1>
+          <div class="toolbar"><button id="add-service" class="btn small">خدمة جديدة</button></div>
+        </div>
+        <ul class="group" id="svc-list"></ul>
+        <p class="section-foot">الخدمات المخفية ما بتظهر للزبائن، والمواعيد السابقة بتضل محفوظة.</p>
+      </section>
+
+      <!-- Staff -->
+      <section class="tab" id="tab-staff" hidden>
+        <div class="main-head">
+          <h1 class="large-title">الموظفين</h1>
+          <div class="toolbar"><button id="add-staff" class="btn small">موظف جديد</button></div>
+        </div>
+        <ul class="group" id="staff-list"></ul>
+        <p class="section-foot">لو موظف بإجازة، أطفِ الزر بدل ما تحذفه — مواعيده القديمة بتضل.</p>
+      </section>
+
+      <!-- Hours -->
+      <section class="tab" id="tab-hours" hidden>
+        <div class="main-head">
+          <h1 class="large-title">ساعات العمل</h1>
+          <div class="toolbar">
+            <select id="hours-staff" class="btn small gray" style="width:auto" aria-label="الموظف"></select>
           </div>
-          <div class="field">
-            <label for="onb-staff">اسمك (أول موظف)</label>
-            <input id="onb-staff" required maxlength="60" />
+        </div>
+        <div class="group hours" id="hours-rows"></div>
+        <div style="margin-top:16px"><button id="save-hours" class="btn">احفظ الساعات</button></div>
+      </section>
+
+      <!-- Settings -->
+      <section class="tab" id="tab-settings" hidden>
+        <div class="main-head"><h1 class="large-title">الإعدادات</h1></div>
+        <form id="settings-form">
+          <p class="section-label">المصلحة</p>
+          <div class="group">
+            <div class="row field-row"><label for="s-name">الاسم</label><input id="s-name" maxlength="80" required /></div>
+            <div class="row field-row"><label for="s-phone">واتساب</label><input id="s-phone" type="tel" inputmode="tel" dir="ltr" placeholder="050-000-0000" /></div>
+            <div class="row field-row"><label for="s-address">العنوان</label><input id="s-address" maxlength="120" placeholder="الشارع، البلد" /></div>
+            <div class="row field-row"><label for="s-desc">وصف</label><input id="s-desc" maxlength="300" placeholder="جملة وحدة عن المصلحة" /></div>
           </div>
-          <p id="onb-error" class="error"></p>
-          <button class="btn block" type="submit">إنشاء المصلحة</button>
+
+          <p class="section-label">الحجز</p>
+          <div class="group">
+            <div class="row field-row"><label for="s-interval">المواعيد كل</label>
+              <select id="s-interval">
+                <option value="5">5 دقائق</option><option value="10">10 دقائق</option><option value="15">15 دقيقة</option>
+                <option value="20">20 دقيقة</option><option value="30">30 دقيقة</option><option value="60">ساعة</option>
+              </select></div>
+            <div class="row field-row"><label for="s-notice">أقل مهلة</label>
+              <select id="s-notice">
+                <option value="0">بدون</option><option value="30">نص ساعة</option><option value="60">ساعة</option>
+                <option value="120">ساعتين</option><option value="240">4 ساعات</option><option value="1440">يوم</option>
+              </select></div>
+            <div class="row field-row"><label for="s-days">الحجز مفتوح</label>
+              <select id="s-days">
+                <option value="7">أسبوع قدّام</option><option value="14">أسبوعين قدّام</option>
+                <option value="30">شهر قدّام</option><option value="60">شهرين قدّام</option><option value="90">3 شهور قدّام</option>
+              </select></div>
+          </div>
+
+          <p class="section-label">واتساب</p>
+          <div class="group">
+            <label class="row" for="s-wa"><span class="grow">تأكيد وتذكير للزبائن</span><input id="s-wa" type="checkbox" class="switch" /></label>
+            <label class="row" for="s-notify"><span class="grow">بلّغني بكل حجز جديد</span><input id="s-notify" type="checkbox" class="switch" /></label>
+          </div>
+          <div style="margin-top:20px"><button class="btn" type="submit">احفظ الإعدادات</button></div>
         </form>
-      </div>
-    </section>
-
-    <!-- ============ Main dashboard ============ -->
-    <section id="app" class="dash hidden">
-      <aside class="side" id="tabs">
-        <button data-tab="appointments" class="active">📅 المواعيد</button>
-        <button data-tab="services">✂️ الخدمات</button>
-        <button data-tab="staff">👥 الموظفين</button>
-        <button data-tab="hours">🕘 ساعات العمل</button>
-        <button data-tab="settings">⚙️ الإعدادات</button>
-      </aside>
-
-      <div>
-        <div class="share">
-          <span>رابط الحجز:</span>
-          <code id="share-link"></code>
-          <button id="copy-link" class="btn sm">نسخ</button>
-          <a id="open-link" class="btn ghost sm" target="_blank">فتح</a>
-        </div>
-
-        <!-- Appointments -->
-        <div class="card tab" id="tab-appointments">
-          <div class="stats" id="stats"></div>
-          <div class="panel-head">
-            <h2 style="margin:0">المواعيد</h2>
-            <div class="row" style="flex:0 1 auto">
-              <input id="appt-date" type="date" />
-              <button id="add-appt" class="btn sm">+ موعد جديد</button>
-            </div>
-          </div>
-          <div class="table-wrap"><table>
-            <thead><tr><th>الساعة</th><th>الزبون</th><th>الخدمة</th><th>الموظف</th><th>الحالة</th><th></th></tr></thead>
-            <tbody id="appt-body"></tbody>
-          </table></div>
-        </div>
-
-        <!-- Services -->
-        <div class="card tab hidden" id="tab-services">
-          <div class="panel-head">
-            <h2 style="margin:0">الخدمات</h2>
-            <button id="add-service" class="btn sm">+ خدمة جديدة</button>
-          </div>
-          <div class="table-wrap"><table>
-            <thead><tr><th>الخدمة</th><th>المدة</th><th>السعر</th><th>فعّالة</th><th></th></tr></thead>
-            <tbody id="svc-body"></tbody>
-          </table></div>
-        </div>
-
-        <!-- Staff -->
-        <div class="card tab hidden" id="tab-staff">
-          <div class="panel-head">
-            <h2 style="margin:0">الموظفين</h2>
-            <button id="add-staff" class="btn sm">+ موظف جديد</button>
-          </div>
-          <div class="table-wrap"><table>
-            <thead><tr><th>الاسم</th><th>فعّال</th><th></th></tr></thead>
-            <tbody id="staff-body"></tbody>
-          </table></div>
-        </div>
-
-        <!-- Hours -->
-        <div class="card tab hidden" id="tab-hours">
-          <div class="panel-head">
-            <h2 style="margin:0">ساعات العمل</h2>
-            <select id="hours-staff" style="max-width:220px"></select>
-          </div>
-          <div id="hours-rows"></div>
-          <button id="save-hours" class="btn">حفظ</button>
-        </div>
-
-        <!-- Settings -->
-        <div class="card tab hidden" id="tab-settings">
-          <h2>الإعدادات</h2>
-          <form id="settings-form">
-            <div class="row">
-              <div class="field"><label for="s-name">اسم المصلحة</label><input id="s-name" required maxlength="80" /></div>
-              <div class="field"><label for="s-phone">رقم واتساب المصلحة</label><input id="s-phone" type="tel" dir="ltr" /></div>
-            </div>
-            <div class="field"><label for="s-address">العنوان</label><input id="s-address" maxlength="120" /></div>
-            <div class="field"><label for="s-desc">وصف قصير</label><textarea id="s-desc" rows="2" maxlength="300"></textarea></div>
-            <div class="row">
-              <div class="field">
-                <label for="s-interval">كل كم دقيقة في موعد؟</label>
-                <select id="s-interval">
-                  <option value="5">5</option><option value="10">10</option><option value="15">15</option>
-                  <option value="20">20</option><option value="30">30</option><option value="60">60</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="s-notice">أقل وقت قبل الموعد (دقائق)</label>
-                <input id="s-notice" type="number" min="0" max="10080" />
-              </div>
-              <div class="field">
-                <label for="s-days">الحجز مفتوح لكم يوم قدّام؟</label>
-                <input id="s-days" type="number" min="1" max="180" />
-              </div>
-            </div>
-            <div class="field"><label><input id="s-wa" type="checkbox" style="width:auto" /> إرسال تأكيد وتذكير للزبائن على واتساب</label></div>
-            <div class="field"><label><input id="s-notify" type="checkbox" style="width:auto" /> بلّغني على واتساب عند كل حجز جديد</label></div>
-            <button class="btn" type="submit">حفظ الإعدادات</button>
-          </form>
-        </div>
-      </div>
-    </section>
+        <p class="section-label">الحساب</p>
+        <div class="group"><button class="row" id="logout-2" style="color:var(--danger)">تسجيل الخروج</button></div>
+      </section>
+    </main>
   </div>
 
-  <!-- Service dialog -->
-  <dialog id="svc-dialog">
+  <!-- Service sheet -->
+  <dialog id="svc-dialog" aria-labelledby="svc-title">
     <form id="svc-form" method="dialog">
-      <h3 id="svc-title">خدمة جديدة</h3>
-      <div class="field"><label for="svc-name">اسم الخدمة</label><input id="svc-name" required maxlength="80" /></div>
-      <div class="row">
-        <div class="field"><label for="svc-duration">المدة (دقائق)</label><input id="svc-duration" type="number" min="5" max="600" step="5" required value="30" /></div>
-        <div class="field"><label for="svc-price">السعر (₪)</label><input id="svc-price" type="number" min="0" step="1" value="0" /></div>
+      <div class="sheet-head">
+        <button class="btn plain" value="cancel" formnovalidate>إلغاء</button>
+        <h3 id="svc-title">خدمة جديدة</h3>
+        <button class="btn plain" value="save">حفظ</button>
       </div>
-      <div class="field"><label for="svc-desc">وصف (اختياري)</label><input id="svc-desc" maxlength="200" /></div>
-      <div class="row">
-        <button class="btn" value="save">حفظ</button>
-        <button class="btn ghost" value="cancel" formnovalidate>إلغاء</button>
+      <div class="sheet-body">
+        <div class="group">
+          <div class="row field-row"><label for="svc-name">الاسم</label><input id="svc-name" maxlength="80" placeholder="قص شعر" required /></div>
+          <div class="row field-row"><label for="svc-duration">المدة</label>
+            <select id="svc-duration">
+              <option value="10">10 دقائق</option><option value="15">15 دقيقة</option><option value="20">20 دقيقة</option>
+              <option value="30">30 دقيقة</option><option value="45">45 دقيقة</option><option value="60">ساعة</option>
+              <option value="90">ساعة ونص</option><option value="120">ساعتين</option><option value="180">3 ساعات</option>
+            </select></div>
+          <div class="row field-row"><label for="svc-price">السعر ₪</label><input id="svc-price" type="number" inputmode="numeric" min="0" step="1" dir="ltr" placeholder="0" /></div>
+          <div class="row field-row"><label for="svc-desc">وصف</label><input id="svc-desc" maxlength="200" placeholder="اختياري" /></div>
+        </div>
       </div>
     </form>
   </dialog>
 
-  <!-- Manual booking dialog -->
-  <dialog id="appt-dialog">
+  <!-- Staff sheet -->
+  <dialog id="staff-dialog" aria-labelledby="staff-title">
+    <form id="staff-form" method="dialog">
+      <div class="sheet-head">
+        <button class="btn plain" value="cancel" formnovalidate>إلغاء</button>
+        <h3 id="staff-title">موظف جديد</h3>
+        <button class="btn plain" value="save">حفظ</button>
+      </div>
+      <div class="sheet-body">
+        <div class="group">
+          <div class="row field-row"><label for="staff-name">الاسم</label><input id="staff-name" maxlength="60" required /></div>
+        </div>
+        <p class="section-foot" id="staff-hint">ساعات عمله بتبلش سبت–خميس 9:00–18:00، وبتقدر تغيّرها من «الساعات».</p>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Manual booking sheet -->
+  <dialog id="appt-dialog" aria-labelledby="appt-dialog-title">
     <form id="appt-form" method="dialog">
-      <h3>موعد جديد (هاتفي / حضوري)</h3>
-      <div class="field"><label for="ap-service">الخدمة</label><select id="ap-service"></select></div>
-      <div class="field"><label for="ap-staff">الموظف</label><select id="ap-staff"></select></div>
-      <div class="row">
-        <div class="field"><label for="ap-date">التاريخ</label><input id="ap-date" type="date" /></div>
-        <div class="field"><label for="ap-slot">الساعة</label><select id="ap-slot"></select></div>
+      <div class="sheet-head">
+        <button class="btn plain" value="cancel" formnovalidate>إلغاء</button>
+        <h3 id="appt-dialog-title">موعد جديد</h3>
+        <button class="btn plain" value="save">احجز</button>
       </div>
-      <div class="row">
-        <div class="field"><label for="ap-name">اسم الزبون</label><input id="ap-name" maxlength="60" /></div>
-        <div class="field"><label for="ap-phone">رقم الجوال</label><input id="ap-phone" type="tel" dir="ltr" /></div>
-      </div>
-      <p id="ap-error" class="error"></p>
-      <div class="row">
-        <button class="btn" value="save">حجز</button>
-        <button class="btn ghost" value="cancel" formnovalidate>إلغاء</button>
+      <div class="sheet-body">
+        <div class="group">
+          <div class="row field-row"><label for="ap-service">الخدمة</label><select id="ap-service"></select></div>
+          <div class="row field-row"><label for="ap-staff">الموظف</label><select id="ap-staff"></select></div>
+          <div class="row field-row"><label for="ap-date">اليوم</label><input id="ap-date" type="date" /></div>
+          <div class="row field-row"><label for="ap-slot">الساعة</label><select id="ap-slot"></select></div>
+        </div>
+        <p class="section-label">الزبون</p>
+        <div class="group">
+          <div class="row field-row"><label for="ap-name">الاسم</label><input id="ap-name" maxlength="60" /></div>
+          <div class="row field-row"><label for="ap-phone">الجوال</label><input id="ap-phone" type="tel" inputmode="tel" dir="ltr" placeholder="050-000-0000" /></div>
+        </div>
+        <p id="ap-error" class="error" role="alert"></p>
       </div>
     </form>
   </dialog>
