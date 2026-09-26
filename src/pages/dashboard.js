@@ -191,7 +191,7 @@ function apptRow(a) {
     <span class="time">${fmtTime(a.starts_at)}<small>${fmtTime(a.ends_at)}</small></span>
     <span class="grow">${esc(a.customer_name)} ${status}
       <span class="sub">${esc(a.service_name)}${a.staff?.name && state.staff.length > 1 ? ` · ${esc(a.staff.name)}` : ''}</span>
-      <span class="sub"><a href="https://wa.me/${wa}" target="_blank" rel="noopener" class="num" aria-label="واتساب ${esc(a.customer_name)}">${esc('0' + a.customer_phone.slice(4))}</a></span>
+      <span class="sub"><a href="https://wa.me/${wa}" target="_blank" rel="noopener" class="tel" aria-label="واتساب ${esc(a.customer_name)}">${esc('0' + a.customer_phone.slice(4))}</a></span>
       ${a.notes ? `<span class="sub">«${esc(a.notes)}»</span>` : ''}
     </span>
     ${actions}

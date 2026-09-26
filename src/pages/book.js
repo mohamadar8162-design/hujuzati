@@ -201,16 +201,14 @@ function stepDetails() {
   const who = hasStaffChoice() ? staffName(s.slot.staff_id) : null;
   app.innerHTML = `
     ${header('time', 'تأكيد الموعد')}
-    <div class="group" style="margin-top:14px">
-      <div class="row" style="padding-block:14px">
-        ${tile(s.slot.starts_at)}
-        <div class="grow">
-          <div class="headline">${esc(s.service.name)}</div>
-          <div class="muted">${fmtDate(s.slot.starts_at)} · <span class="num">${fmtTime(s.slot.starts_at)}</span></div>
-          ${who ? `<div class="muted">عند ${esc(who)}</div>` : ''}
-        </div>
-        <span class="trail num">${price(s.service.price)}</span>
+    <div class="summary-card">
+      ${tile(s.slot.starts_at)}
+      <div class="grow">
+        <div style="font-size:26px;font-weight:800;line-height:1.1"><span class="num">${fmtTime(s.slot.starts_at)}</span></div>
+        <div class="headline" style="margin-top:4px">${esc(s.service.name)}</div>
+        <div class="muted" style="font-size:14px">${fmtDate(s.slot.starts_at)}${who ? ` · عند ${esc(who)}` : ''}</div>
       </div>
+      <span class="num" style="font-weight:700">${price(s.service.price)}</span>
     </div>
 
     <form id="details" novalidate>
