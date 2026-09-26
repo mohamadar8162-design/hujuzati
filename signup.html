@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>إنشاء حساب — حجوزاتي</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <main class="narrow">
+    <a class="logo" href="/">حجوزا<span>تي</span></a>
+    <div class="card" style="margin-top:20px">
+      <h1 style="font-size:1.5rem">إنشاء حساب جديد</h1>
+      <p class="muted">بعد التسجيل بتجهّز صفحة الحجز لمصلحتك.</p>
+      <form id="form" novalidate>
+        <div class="field">
+          <label for="email">البريد الإلكتروني</label>
+          <input id="email" type="email" dir="ltr" autocomplete="email" required />
+        </div>
+        <div class="field">
+          <label for="password">كلمة السر</label>
+          <input id="password" type="password" dir="ltr" autocomplete="new-password" minlength="8" required />
+          <div class="hint">٨ أحرف على الأقل</div>
+        </div>
+        <p id="error" class="error"></p>
+        <button class="btn block" type="submit">إنشاء الحساب</button>
+      </form>
+      <div id="sent" class="hidden">
+        <h2 style="font-size:1.2rem">✉️ تفقّد بريدك</h2>
+        <p>بعتنالك رابط تأكيد. بعد ما تضغط عليه، ادخل وكمّل تجهيز مصلحتك.</p>
+      </div>
+      <p class="muted" style="margin-top:16px">عندك حساب؟ <a href="/login.html">سجّل دخول</a></p>
+    </div>
+  </main>
+  <script type="module" src="/src/pages/signup.js"></script>
+</body>
+</html>
