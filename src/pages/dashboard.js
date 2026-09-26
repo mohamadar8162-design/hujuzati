@@ -457,8 +457,44 @@ function setSelect(sel, value) {
   sel.value = v;
 }
 
+/** Resize to ≤1600px wide JPEG in the browser, then upload to the public "covers" bucket. */
+async function shrink(file) {
+  const img = await createImageBitmap(file);
+  const scale = Math.min(1, 1600 / img.width);
+  const c = Object.assign(document.createElement('canvas'), { width: Math.round(img.width * scale), height: Math.round(img.height * scale) });
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return new Promise((res) => c.toBlob(res, 'image/jpeg', 0.82));
+}
+
+$('#cover-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const label = $('label[for="cover-file"]');
+  label.textContent = 'جارٍ الرفع…';
+  try {
+    const blob = await shrink(file);
+    const path = `${state.business.id}/cover-${Date.now()}.jpg`;
+    const { error: upErr } = await supabase.storage.from('covers').upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+    if (upErr) throw upErr;
+    const url = supabase.storage.from('covers').getPublicUrl(path).data.publicUrl;
+    const { data, error } = await supabase.from('businesses').update({ cover_url: url }).eq('id', state.business.id).select().single();
+    if (error) throw error;
+    state.business = data;
+    fillSettings();
+    toast('انحفظت صورة الغلاف');
+  } catch (err) {
+    toast(err.message || 'ما زبط الرفع', 'err');
+  } finally {
+    label.textContent = 'اختيار صورة';
+    e.target.value = '';
+  }
+});
+
 function fillSettings() {
   const b = state.business;
+  const thumb = $('#cover-thumb');
+  thumb.hidden = !b.cover_url;
+  if (b.cover_url) thumb.src = b.cover_url;
   $('#s-name').value = b.name;
   $('#s-phone').value = b.phone ? '0' + b.phone.slice(4) : '';
   $('#s-address').value = b.address || '';
