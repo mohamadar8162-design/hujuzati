@@ -2,58 +2,75 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>حجوزاتي — نظام حجوزات أونلاين لمصلحتك</title>
-  <meta name="description" content="حجوزاتي: صفحة حجز خاصة لمصلحتك، تذكيرات واتساب تلقائية، ولوحة تحكم بسيطة. مجاناً للبدء." />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>حجوزاتي — مواعيد مصلحتك أونلاين</title>
+  <meta name="description" content="صفحة حجز لمصلحتك بالعربي. الزبون يختار الوقت الفاضي، ويوصله تأكيد وتذكير على واتساب." />
+  <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
   <link rel="stylesheet" href="/src/styles.css" />
 </head>
 <body>
-  <div class="container">
-    <header class="topbar">
-      <a class="logo" href="/">حجوزا<span>تي</span></a>
-      <nav>
-        <a class="btn ghost sm" href="/login.html">تسجيل الدخول</a>
-        <a class="btn sm" href="/signup.html">ابدأ مجاناً</a>
-      </nav>
-    </header>
+  <header class="navbar wide">
+    <a class="brand" href="/">حجوزاتي</a>
+    <nav>
+      <a class="btn plain" href="/login.html">تسجيل الدخول</a>
+      <a class="btn small" href="/signup.html">افتح حساب</a>
+    </nav>
+  </header>
 
+  <main class="page wide">
     <section class="hero">
-      <h1>زبائنك يحجزوا لحالهم،<br />وانت تركّز على شغلك</h1>
-      <p>صفحة حجز خاصة لمصلحتك بالعربي، تأكيد وتذكير تلقائي على واتساب، ولوحة تحكم تشوف فيها كل مواعيدك. بدون مكالمات، بدون دفتر.</p>
-      <a class="btn" href="/signup.html">افتح حسابك خلال دقيقتين</a>
+      <div>
+        <h1 class="large-title">الدفتر صار رابط.</h1>
+        <p>زبائنك بيختاروا الوقت الفاضي من الجوال، وبيوصلهم تأكيد على واتساب وتذكير قبل الموعد بيوم. وانت بتشوف كل مواعيد اليوم بمكان واحد.</p>
+        <div class="cta">
+          <a class="btn large" href="/signup.html">جرّب مجاناً</a>
+          <a class="btn large gray" href="#how">كيف بتشتغل</a>
+        </div>
+      </div>
+
+      <figure class="chat" aria-label="مثال على رسالة التأكيد اللي بتوصل الزبون">
+        <div class="from">
+          <div class="tile" aria-hidden="true"><div class="m">أكتوبر</div><div class="d">14</div></div>
+          <div><b>صالون أحمد</b><span class="footnote">عبر حجوزاتي</span></div>
+        </div>
+        <div class="bubble">
+          مرحبا يوسف، تم تأكيد حجزك عند صالون أحمد: <b>قص شعر ولحية</b> يوم الثلاثاء 14 أكتوبر الساعة <b class="num">17:30</b>.
+          للإلغاء: <span class="link">hujuzati.com/b/ahmad</span>
+        </div>
+        <div class="stamp num">16:02 ✓✓</div>
+      </figure>
     </section>
 
-    <section class="features">
-      <div class="card">
-        <h3>📅 حجز ٢٤/٧</h3>
-        <p class="muted">الزبون يختار الخدمة والموظف والوقت الفاضي من الجوال، حتى وانت نايم.</p>
-      </div>
-      <div class="card">
-        <h3>💬 تذكير على واتساب</h3>
-        <p class="muted">رسالة تأكيد فور الحجز، وتذكير قبل الموعد بيوم. أقل مواعيد ضايعة.</p>
-      </div>
-      <div class="card">
-        <h3>👥 أكثر من موظف</h3>
-        <p class="muted">لكل موظف ساعات عمل خاصة فيه، والنظام يمنع الحجز المزدوج تلقائياً.</p>
-      </div>
-      <div class="card">
-        <h3>📊 لوحة تحكم بسيطة</h3>
-        <p class="muted">مواعيد اليوم، الخدمات والأسعار، ساعات العمل — كله بمكان واحد.</p>
+    <section id="how">
+      <h2 class="title" style="margin-bottom:14px">ثلاث خطوات، وخلصنا</h2>
+      <div class="how">
+        <div>
+          <div class="n">1</div>
+          <h3>سجّل واختار رابط</h3>
+          <p>مثلاً <span class="num">hujuzati.com/b/ahmad</span>. هذا الرابط هو صفحة الحجز تبعتك.</p>
+        </div>
+        <div>
+          <div class="n">2</div>
+          <h3>أضف خدماتك وساعاتك</h3>
+          <p>الأسعار، مدة كل خدمة، الموظفين، وساعات دوام كل واحد فيهم.</p>
+        </div>
+        <div>
+          <div class="n">3</div>
+          <h3>حطّ الرابط بالبايو</h3>
+          <p>على إنستغرام وواتساب بزنس. الحجوزات بتوصلك لحالها، وما في حجز مزدوج.</p>
+        </div>
       </div>
     </section>
 
-    <h2>كيف بتشتغل؟</h2>
-    <ol class="steps">
-      <li>سجّل حسابك واختار اسم لصفحتك، مثلاً <code dir="ltr">hujuzati.com/b/ahmad-salon</code></li>
-      <li>أضف الخدمات، الأسعار، الموظفين وساعات العمل</li>
-      <li>شارك الرابط على إنستغرام وواتساب — والحجوزات بتوصلك لحالها</li>
-    </ol>
+    <p class="for">
+      مناسب لـ<b>صالونات الحلاقة</b> والتجميل، <b>العيادات</b>، المدرّبين، المصوّرين، الكراجات — وكل مصلحة بتشتغل بمواعيد.
+    </p>
+  </main>
 
-    <section class="card" style="text-align:center;margin-bottom:56px">
-      <h2>مناسب لـ</h2>
-      <p class="muted">صالونات حلاقة · صالونات تجميل · عيادات · مدربين · مصورين · كراجات · وأي مصلحة بتشتغل بمواعيد</p>
-    </section>
-  </div>
-  <footer>© حجوزاتي</footer>
+  <footer class="page wide site">
+    <span>حجوزاتي</span>
+    <a href="/login.html">دخول أصحاب المصالح</a>
+  </footer>
 </body>
 </html>

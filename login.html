@@ -2,30 +2,29 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>تسجيل الدخول — حجوزاتي</title>
   <link rel="stylesheet" href="/src/styles.css" />
 </head>
 <body>
-  <main class="narrow">
-    <a class="logo" href="/">حجوزا<span>تي</span></a>
-    <div class="card" style="margin-top:20px">
-      <h1 style="font-size:1.5rem">تسجيل الدخول</h1>
-      <form id="form" novalidate>
-        <div class="field">
-          <label for="email">البريد الإلكتروني</label>
-          <input id="email" type="email" dir="ltr" autocomplete="email" required />
-        </div>
-        <div class="field" id="pw-field">
-          <label for="password">كلمة السر</label>
-          <input id="password" type="password" dir="ltr" autocomplete="current-password" required />
-        </div>
-        <p id="error" class="error"></p>
-        <button id="submit" class="btn block" type="submit">دخول</button>
-      </form>
-      <p style="margin-top:12px"><a href="#" id="forgot">نسيت كلمة السر؟</a></p>
-      <p class="muted">ما عندك حساب؟ <a href="/signup.html">افتح حساب</a></p>
-    </div>
+  <header class="navbar"><a class="brand" href="/">حجوزاتي</a></header>
+  <main class="auth">
+    <form id="form" novalidate>
+      <h1 class="large-title">تسجيل الدخول</h1>
+      <p class="lede">لأصحاب المصالح.</p>
+      <div class="group">
+        <div class="row field-row"><label for="email">الإيميل</label>
+          <input id="email" type="email" dir="ltr" autocomplete="email" placeholder="name@example.com" required /></div>
+        <div class="row field-row"><label for="password">كلمة السر</label>
+          <input id="password" type="password" dir="ltr" autocomplete="current-password" required /></div>
+      </div>
+      <p id="error" class="error" role="alert"></p>
+      <div class="actions">
+        <button class="btn large block" type="submit">دخول</button>
+        <button class="btn plain block" type="button" id="forgot">نسيت كلمة السر</button>
+      </div>
+      <p class="section-foot" style="text-align:center;margin-top:12px">ما عندك حساب؟ <a href="/signup.html">افتح حساب</a></p>
+    </form>
   </main>
   <script type="module" src="/src/pages/login.js"></script>
 </body>
