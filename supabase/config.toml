@@ -1,0 +1,5 @@
+project_id = "hujuzati"
+
+[functions.whatsapp]
+# Called by the database (pg_net), not by a logged-in user — protected by x-webhook-secret instead.
+verify_jwt = false
