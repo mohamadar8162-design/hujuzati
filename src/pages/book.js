@@ -1,7 +1,10 @@
 import { supabase } from '../lib/supabase.js';
-import { $, esc, toast, fmtTime, fmtDate, isoDay, price, normalizePhone, setLoading, TZ } from '../lib/ui.js';
+import {
+  $, esc, toast, fmtTime, fmtDate, isoDay, price, normalizePhone, setLoading, TZ, AR,
+  chevron, backChevron, tile, hourOf, downloadIcs,
+} from '../lib/ui.js';
 
-// Slug from /b/<slug> (Cloudflare rewrite) or ?b=<slug> (local dev).
+// Slug from /b/<slug> (host rewrite) or ?b=<slug> (local dev).
 const params = new URLSearchParams(location.search);
 const slug = (location.pathname.match(/^\/b\/([^/]+)/)?.[1] || params.get('b') || '').toLowerCase();
 const cancelId = params.get('cancel');
@@ -10,14 +13,17 @@ const DRAFT_KEY = 'hujuzati:customer';
 const loadDraft = () => { try { return JSON.parse(localStorage.getItem(DRAFT_KEY)) || {}; } catch { return {}; } };
 const saveDraft = (d) => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* private mode */ } };
 
+const app = $('#app');
+const bar = $('#action-bar');
+
 const s = {
   biz: null,
   step: 'service',          // service → staff → time → details → done
   service: null,
-  staffId: null,            // null = any
+  staffId: null,            // null = first available
   date: isoDay(0),
-  slot: null,               // { starts_at, staff_id }
   slots: [],
+  slot: null,               // { starts_at, staff_id }
   result: null,
 };
 
@@ -28,79 +34,100 @@ async function init() {
   const { data, error } = await supabase.rpc('get_public_business', { p_slug: slug });
   if (error || !data) return notFound();
   s.biz = data;
-
   document.title = `احجز موعد — ${data.name}`;
-  $('#biz-avatar').textContent = data.name.trim().charAt(0);
-  $('#biz-title').textContent = data.name;
-  $('#biz-meta').textContent = [data.category, data.address].filter(Boolean).join(' · ');
-  $('#loading').classList.add('hidden');
-  $('#page').classList.remove('hidden');
-
   if (cancelId) return renderCancel();
   render();
 }
 
 function notFound() {
-  $('#loading').classList.add('hidden');
-  $('#notfound').classList.remove('hidden');
+  app.innerHTML = `<div class="empty" style="padding-top:25vh">
+    <p class="title">ما لقينا هاي الصفحة</p>
+    <p>تأكد من الرابط اللي وصلك من المصلحة.</p>
+  </div>`;
 }
 
 const STEPS = ['service', 'staff', 'time', 'details'];
 const hasStaffChoice = () => s.biz.staff.length > 1;
+const visibleSteps = () => STEPS.filter((x) => x !== 'staff' || hasStaffChoice());
+const staffName = (id) => s.biz.staff.find((x) => x.id === id)?.name;
 
-function go(step) { s.step = step; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+function go(step) {
+  s.step = step;
+  render();
+  window.scrollTo({ top: 0 });
+  app.querySelector('h1, h2')?.focus({ preventScroll: true });
+}
 
 function render() {
-  const visible = STEPS.filter((x) => x !== 'staff' || hasStaffChoice());
-  const idx = visible.indexOf(s.step);
-  $('#stepper').innerHTML = s.step === 'done' ? '' : visible.map((_, i) => `<span class="${i <= idx ? 'on' : ''}"></span>`).join('');
+  bar.hidden = s.step !== 'details';
   ({ service: stepService, staff: stepStaff, time: stepTime, details: stepDetails, done: stepDone })[s.step]();
 }
 
-function backBtn(to) { return `<button class="back" data-back="${to}">→ رجوع</button>`; }
-$('#step').addEventListener('click', (e) => {
+function header(backTo, title) {
+  const n = visibleSteps().indexOf(s.step) + 1;
+  return `
+    <button class="back" data-back="${backTo}">${backChevron()}<span>رجوع</span></button>
+    <h2 class="step-title" tabindex="-1">${title}</h2>
+    <p class="step-count">الخطوة ${n} من ${visibleSteps().length}</p>`;
+}
+
+app.addEventListener('click', (e) => {
   const b = e.target.closest('[data-back]');
   if (b) go(b.dataset.back);
 });
 
-// ---------------- Step 1: service ----------------
+// ---------------------------------------------------------------- 1. Service
 function stepService() {
-  const list = s.biz.services;
-  $('#step').innerHTML = `
-    <h2 style="font-size:1.2rem">اختر الخدمة</h2>
-    ${s.biz.description ? `<p class="muted">${esc(s.biz.description)}</p>` : ''}
-    ${list.length ? list.map((x) => `
-      <button class="choice" data-svc="${x.id}">
-        <span><b>${esc(x.name)}</b>${x.description ? `<br><small class="muted">${esc(x.description)}</small>` : ''}</span>
-        <span style="text-align:left;white-space:nowrap">${price(x.price)}<br><small class="muted">${x.duration_min} دقيقة</small></span>
-      </button>`).join('') : `<p class="empty">لا يوجد خدمات متاحة حالياً</p>`}`;
-  $('#step').onclick = (e) => {
-    const b = e.target.closest('[data-svc]');
-    if (!b) return;
-    s.service = list.find((x) => x.id === b.dataset.svc);
+  const b = s.biz;
+  const meta = [b.category, b.address].filter(Boolean).map(esc).join(' · ');
+  app.innerHTML = `
+    <header class="biz">
+      <h1 class="large-title" tabindex="-1">${esc(b.name)}</h1>
+      ${meta ? `<p class="meta">${meta}</p>` : ''}
+      ${b.description ? `<p class="meta">${esc(b.description)}</p>` : ''}
+    </header>
+    <p class="section-label">اختر الخدمة</p>
+    ${b.services.length ? `<ul class="group">${b.services.map((x) => `
+      <li><button class="row" data-svc="${x.id}">
+        <span class="grow">${esc(x.name)}<span class="sub">${x.duration_min} دقيقة${x.description ? ` · ${esc(x.description)}` : ''}</span></span>
+        <span class="trail num">${price(x.price)}</span>${chevron()}
+      </button></li>`).join('')}</ul>`
+      : `<div class="group"><p class="empty">المصلحة لسا ما أضافت خدمات.</p></div>`}
+    ${b.phone ? `<p class="section-foot">سؤال؟ <a href="https://wa.me/${b.phone.slice(1)}" target="_blank" rel="noopener">راسلنا على واتساب</a></p>` : ''}`;
+
+  app.onclick = (e) => {
+    const btn = e.target.closest('[data-svc]');
+    if (!btn) return;
+    s.service = b.services.find((x) => x.id === btn.dataset.svc);
     s.slot = null;
     if (hasStaffChoice()) go('staff');
-    else { s.staffId = s.biz.staff[0]?.id || null; go('time'); }
+    else { s.staffId = b.staff[0]?.id || null; go('time'); }
   };
 }
 
-// ---------------- Step 2: staff ----------------
+// ---------------------------------------------------------------- 2. Staff
 function stepStaff() {
-  $('#step').innerHTML = `
-    ${backBtn('service')}
-    <h2 style="font-size:1.2rem">عند مين؟</h2>
-    <button class="choice" data-staff=""><b>أي موظف متاح</b><span class="muted">أسرع موعد</span></button>
-    ${s.biz.staff.map((x) => `<button class="choice" data-staff="${x.id}"><b>${esc(x.name)}</b></button>`).join('')}`;
-  $('#step').onclick = (e) => {
-    const b = e.target.closest('[data-staff]');
-    if (!b) return;
-    s.staffId = b.dataset.staff || null;
+  app.innerHTML = `
+    ${header('service', 'عند مين؟')}
+    <p class="section-label">${esc(s.service.name)}</p>
+    <ul class="group">
+      <li><button class="row" data-staff="">
+        <span class="grow">أول موظف متاح<span class="sub">بيطلعلك أقرب وقت فاضي</span></span>${chevron()}
+      </button></li>
+      ${s.biz.staff.map((x) => `<li><button class="row" data-staff="${x.id}">
+        <span class="grow">${esc(x.name)}</span>${chevron()}
+      </button></li>`).join('')}
+    </ul>`;
+  app.onclick = (e) => {
+    const btn = e.target.closest('[data-staff]');
+    if (!btn) return;
+    s.staffId = btn.dataset.staff || null;
     s.slot = null;
     go('time');
   };
 }
 
-// ---------------- Step 3: date + time ----------------
+// ---------------------------------------------------------------- 3. Time
 function stepTime() {
   const days = [];
   const max = Math.min(s.biz.max_days_ahead, 30);
@@ -108,109 +135,138 @@ function stepTime() {
 
   const dayBtn = (d, i) => {
     const date = new Date(`${d}T12:00:00Z`);
-    const wd = new Intl.DateTimeFormat('ar', { weekday: 'short', timeZone: TZ }).format(date);
-    const dm = new Intl.DateTimeFormat('ar', { day: 'numeric', month: 'short', timeZone: TZ }).format(date);
-    const label = i === 0 ? 'اليوم' : i === 1 ? 'بكرا' : wd;
-    return `<button class="day ${d === s.date ? 'on' : ''}" data-day="${d}">${label}<small>${dm}</small></button>`;
+    const wd = i === 0 ? 'اليوم' : i === 1 ? 'بكرا'
+      : new Intl.DateTimeFormat(AR, { weekday: 'short', timeZone: TZ }).format(date);
+    const full = new Intl.DateTimeFormat(AR, { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ }).format(date);
+    return `<button class="day" data-day="${d}" aria-pressed="${d === s.date}" aria-label="${full}">
+      <span class="wd">${wd}</span><span class="dn">${Number(d.slice(8))}</span></button>`;
   };
 
-  $('#step').innerHTML = `
-    ${backBtn(hasStaffChoice() ? 'staff' : 'service')}
-    <h2 style="font-size:1.2rem">اختر اليوم والساعة</h2>
-    <div class="days">${days.map(dayBtn).join('')}</div>
-    <div id="slots"><p class="empty">...جارٍ البحث عن أوقات فاضية</p></div>`;
+  const who = s.staffId ? ` · ${esc(staffName(s.staffId))}` : '';
+  app.innerHTML = `
+    ${header(hasStaffChoice() ? 'staff' : 'service', 'اختر الوقت')}
+    <p class="section-label">${esc(s.service.name)} · ${s.service.duration_min} دقيقة${who}</p>
+    <div class="days" role="group" aria-label="اليوم">${days.map(dayBtn).join('')}</div>
+    <div id="slots"></div>`;
 
-  $('#step').onclick = (e) => {
+  app.onclick = (e) => {
     const d = e.target.closest('[data-day]');
     const t = e.target.closest('[data-slot]');
     if (d) {
       s.date = d.dataset.day;
-      $('#step .day.on')?.classList.remove('on');
-      d.classList.add('on');
+      app.querySelectorAll('.day').forEach((x) => x.setAttribute('aria-pressed', x === d));
       loadSlots();
     }
-    if (t) {
-      s.slot = s.slots[Number(t.dataset.slot)];
-      go('details');
-    }
+    if (t) { s.slot = s.slots[Number(t.dataset.slot)]; go('details'); }
   };
-  $('.day.on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  app.querySelector('.day[aria-pressed="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
   loadSlots();
 }
 
 async function loadSlots() {
   const box = $('#slots');
-  box.innerHTML = `<p class="empty">...جارٍ البحث عن أوقات فاضية</p>`;
+  box.innerHTML = `<p class="empty">بندوّر على أوقات فاضية…</p>`;
   const reqDate = s.date;
   const { data, error } = await supabase.rpc('get_available_slots', {
     p_slug: slug, p_service_id: s.service.id, p_staff_id: s.staffId, p_date: reqDate,
   });
-  if (reqDate !== s.date) return;              // user already clicked another day
-  if (error) { box.innerHTML = `<p class="error">${esc(error.message)}</p>`; return; }
+  if (reqDate !== s.date) return;                    // another day was tapped meanwhile
+  if (error) { box.innerHTML = `<p class="empty">ما قدرنا نجيب الأوقات. جرّب كمان مرة.</p>`; return; }
 
-  // "Any staff": keep one row per time (first free staff member).
+  // First available staff: one button per time.
   const seen = new Set();
   s.slots = (data || []).filter((r) => !seen.has(r.starts_at) && seen.add(r.starts_at));
 
-  box.innerHTML = s.slots.length
-    ? `<div class="slots">${s.slots.map((r, i) => `<button class="slot" data-slot="${i}">${fmtTime(r.starts_at)}</button>`).join('')}</div>`
-    : `<p class="empty">لا يوجد أوقات فاضية بهذا اليوم — جرّب يوم ثاني</p>`;
+  if (!s.slots.length) {
+    box.innerHTML = `<div class="empty"><p class="title">ما في أوقات فاضية بهذا اليوم</p><p>جرّب يوم ثاني.</p></div>`;
+    return;
+  }
+  const parts = [
+    ['صباحاً', (h) => h < 12],
+    ['بعد الظهر', (h) => h >= 12 && h < 17],
+    ['مساءً', (h) => h >= 17],
+  ];
+  box.innerHTML = parts.map(([label, test]) => {
+    const items = s.slots.map((r, i) => [r, i]).filter(([r]) => test(hourOf(r.starts_at)));
+    if (!items.length) return '';
+    return `<section class="slot-group"><h3>${label}</h3><div class="slots">
+      ${items.map(([r, i]) => `<button class="slot" data-slot="${i}">${fmtTime(r.starts_at)}</button>`).join('')}
+    </div></section>`;
+  }).join('');
 }
 
-// ---------------- Step 4: details ----------------
+// ---------------------------------------------------------------- 4. Details
 function stepDetails() {
   const draft = loadDraft();
-  const staffName = s.biz.staff.find((x) => x.id === s.slot.staff_id)?.name;
-  $('#step').innerHTML = `
-    ${backBtn('time')}
-    <h2 style="font-size:1.2rem">تفاصيلك</h2>
-    <div class="summary" style="margin-bottom:16px">
-      <div><span class="muted">الخدمة</span><b>${esc(s.service.name)}</b></div>
-      <div><span class="muted">الموعد</span><b>${fmtDate(s.slot.starts_at)} · ${fmtTime(s.slot.starts_at)}</b></div>
-      ${hasStaffChoice() && staffName ? `<div><span class="muted">عند</span><b>${esc(staffName)}</b></div>` : ''}
-      <div><span class="muted">السعر</span><b>${price(s.service.price)}</b></div>
+  const who = hasStaffChoice() ? staffName(s.slot.staff_id) : null;
+  app.innerHTML = `
+    ${header('time', 'تأكيد الموعد')}
+    <div class="group" style="margin-top:14px">
+      <div class="row" style="padding-block:14px">
+        ${tile(s.slot.starts_at)}
+        <div class="grow">
+          <div class="headline">${esc(s.service.name)}</div>
+          <div class="muted">${fmtDate(s.slot.starts_at)} · <span class="num">${fmtTime(s.slot.starts_at)}</span></div>
+          ${who ? `<div class="muted">عند ${esc(who)}</div>` : ''}
+        </div>
+        <span class="trail num">${price(s.service.price)}</span>
+      </div>
     </div>
+
     <form id="details" novalidate>
-      <div class="field"><label for="c-name">الاسم</label><input id="c-name" autocomplete="name" maxlength="60" value="${esc(draft.name || '')}" /></div>
-      <div class="field"><label for="c-phone">رقم الجوال (واتساب)</label>
-        <input id="c-phone" type="tel" dir="ltr" autocomplete="tel" placeholder="050-1234567" value="${esc(draft.phone || '')}" />
-        <div class="hint">رح يوصلك تأكيد وتذكير على واتساب</div></div>
-      <div class="field"><label for="c-notes">ملاحظة (اختياري)</label><input id="c-notes" maxlength="300" /></div>
-      <p id="c-error" class="error"></p>
-      <button class="btn block" type="submit">تأكيد الحجز</button>
+      <p class="section-label">بياناتك</p>
+      <div class="group">
+        <div class="row field-row"><label for="c-name">الاسم</label>
+          <input id="c-name" autocomplete="name" maxlength="60" placeholder="الاسم الكامل" value="${esc(draft.name || '')}" required /></div>
+        <div class="row field-row"><label for="c-phone">الجوال</label>
+          <input id="c-phone" type="tel" inputmode="tel" dir="ltr" autocomplete="tel" placeholder="050-000-0000" value="${esc(draft.phone || '')}" required /></div>
+        <div class="row field-row"><label for="c-notes">ملاحظة</label>
+          <input id="c-notes" maxlength="300" placeholder="اختياري" /></div>
+      </div>
+      <p class="section-foot">رح يوصلك تأكيد وتذكير على واتساب لهذا الرقم.</p>
+      <p class="error" id="c-error" role="alert"></p>
     </form>`;
-  $('#step').onclick = null;
+  app.onclick = null;
+
+  const btn = $('#primary');
+  btn.textContent = 'احجز الموعد';
+  const nameEl = $('#c-name');
+  const phoneEl = $('#c-phone');
+  const valid = () => nameEl.value.trim().length >= 2 && normalizePhone(phoneEl.value);
+  const sync = () => { btn.disabled = !valid(); };
+  nameEl.addEventListener('input', sync);
+  phoneEl.addEventListener('input', sync);
+  phoneEl.addEventListener('blur', () => {
+    $('#c-error').textContent = phoneEl.value && !normalizePhone(phoneEl.value)
+      ? 'الرقم لازم يكون رقم جوال إسرائيلي، مثل 0501234567.' : '';
+  });
+  sync();
 
   $('#details').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = $('#c-name').value.trim();
-    const rawPhone = $('#c-phone').value.trim();
-    const phone = normalizePhone(rawPhone);
-    const err = $('#c-error');
-    if (name.length < 2) return (err.textContent = 'اكتب اسمك.');
-    if (!phone) return (err.textContent = 'رقم الجوال غير صحيح (مثلاً 0501234567).');
-
-    const btn = e.submitter;
-    setLoading(btn, true);
+    if (!valid()) return;
+    const name = nameEl.value.trim();
+    const rawPhone = phoneEl.value.trim();
+    setLoading(btn, true, 'جارٍ الحجز…');
     const { data, error } = await supabase.rpc('create_booking', {
       p_slug: slug,
       p_service_id: s.service.id,
       p_staff_id: s.slot.staff_id,
       p_starts_at: s.slot.starts_at,
       p_name: name,
-      p_phone: phone,
+      p_phone: normalizePhone(rawPhone),
       p_notes: $('#c-notes').value.trim() || null,
     });
     setLoading(btn, false);
 
     if (error) {
       if (error.message.includes('SLOT_TAKEN')) {
-        toast('للأسف حدا سبقك على هذا الوقت — اختر وقت ثاني', 'err');
+        toast('هذا الوقت انحجز قبل شوي. اختر وقت ثاني.', 'err');
         return go('time');
       }
-      err.textContent = error.message.includes('TOO_MANY_BOOKINGS')
-        ? 'عندك ٣ حجوزات قادمة عند هذه المصلحة — هذا الحد الأقصى.'
-        : 'صار خطأ، جرّب مرة ثانية.';
+      $('#c-error').textContent = error.message.includes('TOO_MANY_BOOKINGS')
+        ? 'عندك 3 مواعيد قادمة عند هاي المصلحة، وهذا الحد.'
+        : 'ما زبط الحجز. جرّب كمان مرة.';
       return;
     }
     saveDraft({ name, phone: rawPhone });
@@ -219,44 +275,61 @@ function stepDetails() {
   });
 }
 
-// ---------------- Step 5: done ----------------
+// ---------------------------------------------------------------- 5. Done
 function stepDone() {
   const r = s.result;
-  $('#step').onclick = null;
-  $('#step').innerHTML = `
-    <div class="success">
-      <div class="check">✓</div>
-      <h2>تم الحجز!</h2>
-      <p><b>${esc(s.service.name)}</b><br>${fmtDate(r.starts_at)} · الساعة ${fmtTime(r.starts_at)}
-      ${r.staff_name && hasStaffChoice() ? `<br>عند ${esc(r.staff_name)}` : ''}</p>
-      <p class="muted">رح يوصلك تأكيد على واتساب. إذا بدك تلغي، في رابط إلغاء بالرسالة.</p>
-      ${s.biz.address ? `<p class="muted">📍 ${esc(s.biz.address)}</p>` : ''}
-      <button class="btn ghost" id="again">حجز موعد ثاني</button>
-    </div>`;
+  const end = new Date(new Date(r.starts_at).getTime() + s.service.duration_min * 60000).toISOString();
+  app.innerHTML = `
+    <div class="confirm">
+      ${tile(r.starts_at, true)}
+      <h1 class="large-title" tabindex="-1">تم الحجز</h1>
+      <p class="headline">${esc(s.service.name)}</p>
+      <p class="muted">${fmtDate(r.starts_at)} · الساعة <span class="num">${fmtTime(r.starts_at)}</span></p>
+      ${r.staff_name && hasStaffChoice() ? `<p class="muted">عند ${esc(r.staff_name)}</p>` : ''}
+      ${s.biz.address ? `<p class="muted">${esc(s.biz.address)}</p>` : ''}
+    </div>
+    <div style="display:grid;gap:8px;margin-top:28px">
+      <button class="btn large gray block" id="ics">أضف للتقويم</button>
+      <button class="btn plain block" id="again">احجز موعد ثاني</button>
+    </div>
+    <p class="section-foot" style="text-align:center;margin-top:18px">وصلك تأكيد على واتساب. لو بدك تلغي، في رابط إلغاء بالرسالة.</p>`;
+  $('#ics').addEventListener('click', () => downloadIcs({
+    title: `${s.service.name} — ${s.biz.name}`,
+    start: r.starts_at, end,
+    location: s.biz.address || s.biz.name,
+  }));
   $('#again').addEventListener('click', () => { s.service = null; s.slot = null; go('service'); });
 }
 
-// ---------------- Cancel (from WhatsApp link) ----------------
+// ---------------------------------------------------------------- Cancel (link from WhatsApp)
 function renderCancel() {
-  $('#stepper').innerHTML = '';
-  $('#step').innerHTML = `
-    <h2 style="font-size:1.2rem">إلغاء موعد</h2>
-    <p class="muted">للتأكيد، اكتب رقم الجوال اللي حجزت فيه.</p>
+  bar.hidden = true;
+  app.innerHTML = `
+    <header class="biz"><h1 class="large-title" tabindex="-1">إلغاء موعد</h1>
+      <p class="meta">${esc(s.biz.name)}</p></header>
     <form id="cancel-form" novalidate>
-      <div class="field"><input id="x-phone" type="tel" dir="ltr" placeholder="050-1234567" value="${esc(loadDraft().phone || '')}" /></div>
-      <p id="x-error" class="error"></p>
-      <button class="btn danger block" type="submit">إلغاء الموعد</button>
-    </form>
-    <p style="margin-top:12px"><a href="/b/${esc(slug)}">حجز موعد جديد</a></p>`;
+      <p class="section-label">للتأكيد، اكتب رقم الجوال اللي حجزت فيه</p>
+      <div class="group">
+        <div class="row field-row"><label for="x-phone">الجوال</label>
+          <input id="x-phone" type="tel" inputmode="tel" dir="ltr" autocomplete="tel" placeholder="050-000-0000" value="${esc(loadDraft().phone || '')}" /></div>
+      </div>
+      <p class="error" id="x-error" role="alert"></p>
+      <div style="display:grid;gap:8px;margin-top:20px">
+        <button class="btn large destructive block" type="submit">إلغاء الموعد</button>
+        <a class="btn plain block" href="/b/${esc(slug)}">لا، خلّيه</a>
+      </div>
+    </form>`;
   $('#cancel-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const phone = normalizePhone($('#x-phone').value);
-    if (!phone) return ($('#x-error').textContent = 'رقم الجوال غير صحيح.');
-    setLoading(e.submitter, true);
+    if (!phone) return ($('#x-error').textContent = 'الرقم لازم يكون رقم جوال، مثل 0501234567.');
+    setLoading(e.submitter, true, 'جارٍ الإلغاء…');
     const { data, error } = await supabase.rpc('cancel_booking', { p_id: cancelId, p_phone: phone });
     setLoading(e.submitter, false);
-    if (error || !data) return ($('#x-error').textContent = 'ما لقينا موعد فعّال بهذا الرقم (أو الموعد مرّ).');
-    $('#step').innerHTML = `<div class="success"><div class="check">✓</div><h2>تم إلغاء الموعد</h2>
-      <p><a class="btn" href="/b/${esc(slug)}">حجز موعد جديد</a></p></div>`;
+    if (error || !data) return ($('#x-error').textContent = 'ما لقينا موعد قادم بهذا الرقم. يمكن انلغى من قبل أو الموعد مرّ.');
+    app.innerHTML = `<div class="confirm">
+      <h1 class="large-title" tabindex="-1">انلغى الموعد</h1>
+      <p class="muted">ما رح نذكّرك فيه.</p></div>
+      <div style="margin-top:28px"><a class="btn large block" href="/b/${esc(slug)}">احجز موعد جديد</a></div>`;
   });
 }
