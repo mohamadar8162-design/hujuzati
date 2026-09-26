@@ -1,33 +1,31 @@
 import { supabase, requireSession } from '../lib/supabase.js';
 import {
-  $, $$, esc, toast, fmtTime, isoDay, price, normalizePhone, slugify, setLoading,
-  DAYS, STATUS_LABELS, TZ,
+  $, $$, esc, toast, fmtTime, fmtDate, isoDay, price, normalizePhone, slugify, setLoading,
+  DAYS, STATUS_LABELS, TZ, icon,
 } from '../lib/ui.js';
 
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
 const state = {
   session: null,
   business: null,
   services: [],
   staff: [],
   editingServiceId: null,
+  editingStaffId: null,
 };
+
+// Icons in the sidebar
+$$('[data-icon]').forEach((el) => { el.outerHTML = icon(el.dataset.icon); });
 
 // Password-reset links land here with a recovery session.
 supabase.auth.onAuthStateChange(async (event) => {
   if (event === 'PASSWORD_RECOVERY') {
-    const pw = prompt('اكتب كلمة سر جديدة (٨ أحرف على الأقل):');
+    const pw = prompt('اكتب كلمة سر جديدة (8 أحرف على الأقل):');
     if (pw && pw.length >= 8) {
       const { error } = await supabase.auth.updateUser({ password: pw });
-      toast(error ? error.message : 'تم تغيير كلمة السر ✅', error ? 'err' : 'ok');
+      toast(error ? error.message : 'تغيّرت كلمة السر', error ? 'err' : 'ok');
     }
   }
 });
-
-state.session = await requireSession();
-if (state.session) await boot();
 
 async function boot() {
   const { data: biz, error } = await supabase
@@ -36,12 +34,13 @@ async function boot() {
 
   if (!biz) return showOnboarding();
   state.business = biz;
+  document.title = `${biz.name} — حجوزاتي`;
   $('#biz-name').textContent = biz.name;
-  $('#onboarding').classList.add('hidden');
-  $('#app').classList.remove('hidden');
+  $('#onboarding').hidden = true;
+  $('#app').hidden = false;
 
   const link = `${location.origin}/b/${biz.slug}`;
-  $('#share-link').textContent = link;
+  $('#share-link').textContent = link.replace(/^https?:\/\//, '');
   $('#open-link').href = link;
 
   await Promise.all([loadServices(), loadStaff()]);
@@ -55,7 +54,7 @@ async function boot() {
 // Onboarding
 // ---------------------------------------------------------------------------
 function showOnboarding() {
-  $('#onboarding').classList.remove('hidden');
+  $('#onboarding').hidden = false;
   let slugTouched = false;
   $('#onb-slug').addEventListener('input', () => (slugTouched = true));
   $('#onb-name').addEventListener('input', (e) => {
@@ -75,21 +74,20 @@ function showOnboarding() {
     const staffName = $('#onb-staff').value.trim();
 
     if (name.length < 2) return (err.textContent = 'اكتب اسم المصلحة.');
+    if (!staffName) return (err.textContent = 'اكتب اسمك — انت أول موظف.');
     if (!/^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/.test(slug))
-      return (err.textContent = 'الرابط لازم يكون ٣–٤٠ حرف إنجليزي صغير، أرقام أو شَرطة.');
-    if (rawPhone && !phone) return (err.textContent = 'رقم الجوال غير صحيح.');
-    if (!staffName) return (err.textContent = 'اكتب اسمك.');
+      return (err.textContent = 'الرابط لازم يكون 3–40 حرف: أحرف إنجليزية صغيرة، أرقام أو شَرطة.');
+    if (rawPhone && !phone) return (err.textContent = 'رقم الجوال مش صحيح. مثال: 0501234567.');
 
-    setLoading(btn, true);
+    setLoading(btn, true, 'جارٍ الإنشاء…');
     const { data: free } = await supabase.rpc('slug_available', { p_slug: slug });
     if (!free) {
       setLoading(btn, false);
-      return (err.textContent = 'هذا الرابط محجوز — جرّب اسم ثاني.');
+      return (err.textContent = `الرابط /b/${slug} محجوز. جرّب اسم ثاني.`);
     }
 
     const { data: biz, error } = await supabase.from('businesses').insert({
-      owner_id: state.session.user.id,
-      name, slug, phone,
+      owner_id: state.session.user.id, name, slug, phone,
       category: $('#onb-category').value,
     }).select().single();
     if (error) {
@@ -99,34 +97,51 @@ function showOnboarding() {
 
     await supabase.from('staff').insert({ business_id: biz.id, name: staffName });
     setLoading(btn, false);
-    toast('تم إنشاء المصلحة 🎉 أضف خدماتك الآن');
     await boot();
     switchTab('services');
+    toast('المصلحة جاهزة. أضف أول خدمة.');
   });
 }
 
 // ---------------------------------------------------------------------------
-// Tabs
+// Navigation
 // ---------------------------------------------------------------------------
 function switchTab(name) {
-  $$('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
-  $$('.tab').forEach((t) => t.classList.toggle('hidden', t.id !== `tab-${name}`));
+  $$('#tabs [data-tab]').forEach((b) => {
+    if (b.dataset.tab === name) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  });
+  $$('.tab').forEach((t) => (t.hidden = t.id !== `tab-${name}`));
   if (name === 'hours') renderHoursStaffSelect();
+  window.scrollTo({ top: 0 });
 }
 $('#tabs').addEventListener('click', (e) => {
-  const b = e.target.closest('button[data-tab]');
+  const b = e.target.closest('[data-tab]');
   if (b) switchTab(b.dataset.tab);
 });
 
-$('#logout').addEventListener('click', async () => {
+['#logout', '#logout-2'].forEach((sel) => $(sel).addEventListener('click', async () => {
   await supabase.auth.signOut();
   location.href = '/';
-});
+}));
 
 $('#copy-link').addEventListener('click', async () => {
-  await navigator.clipboard.writeText($('#share-link').textContent);
-  toast('تم نسخ الرابط');
+  await navigator.clipboard.writeText($('#open-link').href);
+  toast('انتسخ الرابط');
 });
+
+/** Sheet dialogs: Cancel closes, Save runs `onSave` and closes only on success. */
+function sheet(dialog, form, onSave) {
+  form.addEventListener('submit', async (e) => {
+    if (e.submitter?.value === 'cancel') return;
+    e.preventDefault();
+    const btn = e.submitter;
+    if (btn) btn.disabled = true;
+    const ok = await onSave();
+    if (btn) btn.disabled = false;
+    if (ok) dialog.close();
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Appointments
@@ -135,7 +150,10 @@ const dayOf = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format
 
 async function loadAppointments() {
   const date = $('#appt-date').value || isoDay(0);
-  // Fetch a generous UTC window, then filter by Israel-local date (DST-safe).
+  $('#appt-title').textContent = date === isoDay(0) ? 'اليوم'
+    : date === isoDay(1) ? 'بكرا' : fmtDate(`${date}T12:00:00Z`);
+
+  // Generous UTC window, then filter by Israel-local date (DST-safe).
   const from = new Date(`${date}T00:00:00Z`); from.setUTCDate(from.getUTCDate() - 1);
   const to = new Date(`${date}T00:00:00Z`); to.setUTCDate(to.getUTCDate() + 2);
 
@@ -149,62 +167,48 @@ async function loadAppointments() {
   if (error) return toast(error.message, 'err');
 
   const rows = data.filter((a) => dayOf(a.starts_at) === date);
-  const body = $('#appt-body');
-  body.innerHTML = rows.length ? rows.map(apptRow).join('')
-    : `<tr><td colspan="6" class="empty">لا يوجد مواعيد بهذا اليوم</td></tr>`;
+  const active = rows.filter((a) => a.status === 'confirmed' || a.status === 'completed');
+  const revenue = active.reduce((sum, a) => sum + Number(a.price), 0);
+  $('#stats').innerHTML = rows.length
+    ? `<b class="num">${active.length}</b> ${active.length === 1 ? 'موعد' : 'مواعيد'} · <b class="num">${price(revenue)}</b> متوقّع`
+    : '';
 
-  loadStats();
+  $('#appt-list').innerHTML = rows.length ? rows.map(apptRow).join('')
+    : `<li><div class="empty"><p class="title">ما في مواعيد</p><p>شارك رابط الحجز، أو أضف موعد أخذته بالتلفون.</p></div></li>`;
 }
 
 function apptRow(a) {
   const wa = a.customer_phone.replace('+', '');
+  const status = a.status === 'confirmed' ? ''
+    : `<span class="status ${a.status}">${STATUS_LABELS[a.status]}</span>`;
   const actions = a.status === 'confirmed' ? `
-      <button class="btn ghost sm" data-act="completed" data-id="${a.id}">✔ تم</button>
-      <button class="btn ghost sm" data-act="no_show" data-id="${a.id}">لم يحضر</button>
-      <button class="btn danger sm" data-act="cancelled" data-id="${a.id}">إلغاء</button>` : '';
-  return `<tr>
-    <td><b>${fmtTime(a.starts_at)}</b><div class="hint">${fmtTime(a.ends_at)}</div></td>
-    <td>${esc(a.customer_name)}<div class="hint"><a href="https://wa.me/${wa}" target="_blank" dir="ltr">${esc(a.customer_phone)}</a></div>
-        ${a.notes ? `<div class="hint">📝 ${esc(a.notes)}</div>` : ''}</td>
-    <td>${esc(a.service_name)}<div class="hint">${price(a.price)}</div></td>
-    <td>${esc(a.staff?.name || '')}</td>
-    <td><span class="badge ${a.status}">${STATUS_LABELS[a.status]}</span></td>
-    <td style="white-space:nowrap">${actions}</td>
-  </tr>`;
+    <div class="row-actions">
+      <button class="btn small gray" data-act="completed" data-id="${a.id}">وصل</button>
+      <button class="btn small gray" data-act="no_show" data-id="${a.id}">ما إجا</button>
+      <button class="btn small destructive" data-act="cancelled" data-id="${a.id}">إلغاء</button>
+    </div>` : '';
+  return `<li><div class="row appt${a.status === 'confirmed' ? '' : ' done'}">
+    <span class="time">${fmtTime(a.starts_at)}<small>${fmtTime(a.ends_at)}</small></span>
+    <span class="grow">${esc(a.customer_name)} ${status}
+      <span class="sub">${esc(a.service_name)}${a.staff?.name && state.staff.length > 1 ? ` · ${esc(a.staff.name)}` : ''}</span>
+      <span class="sub"><a href="https://wa.me/${wa}" target="_blank" rel="noopener" class="num" aria-label="واتساب ${esc(a.customer_name)}">${esc('0' + a.customer_phone.slice(4))}</a></span>
+      ${a.notes ? `<span class="sub">«${esc(a.notes)}»</span>` : ''}
+    </span>
+    ${actions}
+  </div></li>`;
 }
 
-$('#appt-body').addEventListener('click', async (e) => {
+$('#appt-list').addEventListener('click', async (e) => {
   const b = e.target.closest('button[data-act]');
   if (!b) return;
-  if (b.dataset.act === 'cancelled' && !confirm('إلغاء الموعد؟ الزبون رح يوصله إشعار.')) return;
+  if (b.dataset.act === 'cancelled' && !confirm('تلغي الموعد؟ الزبون رح توصله رسالة إلغاء.')) return;
+  b.disabled = true;
   const { error } = await supabase.from('appointments').update({ status: b.dataset.act }).eq('id', b.dataset.id);
-  if (error) return toast(error.message, 'err');
-  toast('تم التحديث');
+  if (error) { b.disabled = false; return toast(error.message, 'err'); }
   loadAppointments();
 });
 
 $('#appt-date').addEventListener('change', loadAppointments);
-
-async function loadStats() {
-  const today = isoDay(0);
-  const now = new Date();
-  const week = new Date(Date.now() + 7 * 86400000);
-  const { data } = await supabase
-    .from('appointments')
-    .select('starts_at, price, status')
-    .eq('business_id', state.business.id)
-    .eq('status', 'confirmed')
-    .gte('starts_at', new Date(Date.now() - 86400000).toISOString())
-    .lt('starts_at', week.toISOString());
-  const list = data || [];
-  const todays = list.filter((a) => dayOf(a.starts_at) === today);
-  const upcoming = list.filter((a) => new Date(a.starts_at) > now);
-  const revenue = todays.reduce((s, a) => s + Number(a.price), 0);
-  $('#stats').innerHTML = `
-    <div class="card stat"><span class="muted">مواعيد اليوم</span><b>${todays.length}</b></div>
-    <div class="card stat"><span class="muted">قادمة هذا الأسبوع</span><b>${upcoming.length}</b></div>
-    <div class="card stat"><span class="muted">دخل متوقّع اليوم</span><b>${price(revenue)}</b></div>`;
-}
 
 function subscribeRealtime() {
   supabase
@@ -213,18 +217,19 @@ function subscribeRealtime() {
       event: '*', schema: 'public', table: 'appointments',
       filter: `business_id=eq.${state.business.id}`,
     }, (payload) => {
-      if (payload.eventType === 'INSERT') toast(`🔔 حجز جديد: ${payload.new.customer_name}`);
+      if (payload.eventType === 'INSERT') toast(`حجز جديد: ${payload.new.customer_name}، ${fmtTime(payload.new.starts_at)}`);
       loadAppointments();
     })
     .subscribe();
 }
 
-// ---- Manual booking (phone / walk-in) ----
+// ---- Manual booking (phone / walk-in)
 $('#add-appt').addEventListener('click', () => {
-  if (!state.services.some((s) => s.active)) return toast('أضف خدمة أولاً', 'err');
-  $('#ap-service').innerHTML = state.services.filter((s) => s.active)
-    .map((s) => `<option value="${s.id}">${esc(s.name)} (${s.duration_min} د)</option>`).join('');
-  $('#ap-staff').innerHTML = `<option value="">أي موظف</option>` + state.staff.filter((s) => s.active)
+  const active = state.services.filter((s) => s.active);
+  if (!active.length) { switchTab('services'); return toast('أضف خدمة أول', 'err'); }
+  $('#ap-service').innerHTML = active
+    .map((s) => `<option value="${s.id}">${esc(s.name)} · ${s.duration_min} د</option>`).join('');
+  $('#ap-staff').innerHTML = `<option value="">أول موظف متاح</option>` + state.staff.filter((s) => s.active)
     .map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
   $('#ap-date').value = $('#appt-date').value || isoDay(0);
   $('#ap-name').value = ''; $('#ap-phone').value = ''; $('#ap-error').textContent = '';
@@ -244,39 +249,35 @@ async function loadManualSlots() {
   const unique = [...new Set((data || []).map((r) => r.starts_at))];
   $('#ap-slot').innerHTML = unique.length
     ? unique.map((t) => `<option value="${t}">${fmtTime(t)}</option>`).join('')
-    : `<option value="">لا يوجد أوقات فاضية</option>`;
+    : `<option value="">ما في وقت فاضي</option>`;
 }
 
-$('#appt-form').addEventListener('submit', async (e) => {
-  if (e.submitter?.value === 'cancel') return;
-  e.preventDefault();
+sheet($('#appt-dialog'), $('#appt-form'), async () => {
+  const err = $('#ap-error');
   const phone = normalizePhone($('#ap-phone').value);
   const name = $('#ap-name').value.trim();
-  if (!$('#ap-slot').value) return ($('#ap-error').textContent = 'اختر ساعة.');
-  if (name.length < 2) return ($('#ap-error').textContent = 'اكتب اسم الزبون.');
-  if (!phone) return ($('#ap-error').textContent = 'رقم الجوال غير صحيح.');
+  if (!$('#ap-slot').value) return (err.textContent = 'ما في وقت فاضي بهذا اليوم.', false);
+  if (name.length < 2) return (err.textContent = 'اكتب اسم الزبون.', false);
+  if (!phone) return (err.textContent = 'رقم الجوال مش صحيح. مثال: 0501234567.', false);
 
   const { error } = await supabase.rpc('create_booking', {
     p_slug: state.business.slug,
     p_service_id: $('#ap-service').value,
     p_staff_id: $('#ap-staff').value || null,
     p_starts_at: $('#ap-slot').value,
-    p_name: name,
-    p_phone: phone,
-    p_notes: null,
+    p_name: name, p_phone: phone, p_notes: null,
   });
-  if (error) return ($('#ap-error').textContent = bookingError(error.message));
-  $('#appt-dialog').close();
-  toast('تم الحجز ✅');
+  if (error) {
+    err.textContent = error.message.includes('SLOT_TAKEN') ? 'هذا الوقت انحجز. اختر وقت ثاني.'
+      : error.message.includes('TOO_MANY_BOOKINGS') ? 'لهذا الرقم 3 مواعيد قادمة، وهذا الحد.'
+      : error.message;
+    return false;
+  }
+  toast('انحجز الموعد');
   $('#appt-date').value = $('#ap-date').value;
   loadAppointments();
+  return true;
 });
-
-function bookingError(msg) {
-  if (msg.includes('SLOT_TAKEN')) return 'هذا الوقت انحجز — اختر وقت ثاني.';
-  if (msg.includes('TOO_MANY_BOOKINGS')) return 'لهذا الرقم ٣ حجوزات قادمة — الحد الأقصى.';
-  return msg;
-}
 
 // ---------------------------------------------------------------------------
 // Services
@@ -286,33 +287,32 @@ async function loadServices() {
     .eq('business_id', state.business.id).order('sort').order('created_at');
   if (error) return toast(error.message, 'err');
   state.services = data;
-  $('#svc-body').innerHTML = data.length ? data.map((s) => `<tr>
-      <td>${esc(s.name)}${s.description ? `<div class="hint">${esc(s.description)}</div>` : ''}</td>
-      <td>${s.duration_min} د</td>
-      <td>${price(s.price)}</td>
-      <td><input type="checkbox" data-toggle-svc="${s.id}" ${s.active ? 'checked' : ''} style="width:auto" /></td>
-      <td style="white-space:nowrap">
-        <button class="btn ghost sm" data-edit-svc="${s.id}">تعديل</button>
-        <button class="btn danger sm" data-del-svc="${s.id}">حذف</button>
-      </td></tr>`).join('')
-    : `<tr><td colspan="5" class="empty">ما في خدمات بعد — أضف أول خدمة</td></tr>`;
+  $('#svc-list').innerHTML = data.length ? data.map((s) => `<li><div class="row">
+      <button class="grow" data-edit-svc="${s.id}" style="all:unset;cursor:pointer;flex:1;min-width:0">
+        <span${s.active ? '' : ' class="muted"'}>${esc(s.name)}</span>
+        <span class="sub">${s.duration_min} دقيقة · <span class="num">${price(s.price)}</span>${s.active ? '' : ' · مخفية'}</span>
+      </button>
+      <input type="checkbox" class="switch" data-toggle-svc="${s.id}" ${s.active ? 'checked' : ''} aria-label="${s.active ? 'ظاهرة للزبائن' : 'مخفية عن الزبائن'}: ${esc(s.name)}" />
+    </div></li>`).join('')
+    : `<li><div class="empty"><p class="title">ما في خدمات لسا</p><p>أضف أول خدمة عشان الزبائن يقدروا يحجزوا.</p></div></li>`;
 }
 
-$('#add-service').addEventListener('click', () => openServiceDialog(null));
+$('#add-service').addEventListener('click', () => openServiceSheet(null));
 
-function openServiceDialog(svc) {
+function openServiceSheet(svc) {
   state.editingServiceId = svc?.id || null;
-  $('#svc-title').textContent = svc ? 'تعديل خدمة' : 'خدمة جديدة';
+  $('#svc-title').textContent = svc ? 'تعديل الخدمة' : 'خدمة جديدة';
   $('#svc-name').value = svc?.name || '';
-  $('#svc-duration').value = svc?.duration_min || 30;
-  $('#svc-price').value = svc?.price ?? 0;
+  const dur = $('#svc-duration');
+  const d = String(svc?.duration_min || 30);
+  if (![...dur.options].some((o) => o.value === d)) dur.add(new Option(`${d} دقيقة`, d));
+  dur.value = d;
+  $('#svc-price').value = svc ? Number(svc.price) : '';
   $('#svc-desc').value = svc?.description || '';
   $('#svc-dialog').showModal();
 }
 
-$('#svc-form').addEventListener('submit', async (e) => {
-  if (e.submitter?.value === 'cancel') return;
-  e.preventDefault();
+sheet($('#svc-dialog'), $('#svc-form'), async () => {
   const row = {
     business_id: state.business.id,
     name: $('#svc-name').value.trim(),
@@ -320,30 +320,20 @@ $('#svc-form').addEventListener('submit', async (e) => {
     price: Number($('#svc-price').value || 0),
     description: $('#svc-desc').value.trim() || null,
   };
-  if (!row.name) return toast('اكتب اسم الخدمة', 'err');
-  if (!(row.duration_min >= 5 && row.duration_min <= 600)) return toast('المدة بين ٥ و ٦٠٠ دقيقة', 'err');
-
-  const q = state.editingServiceId
-    ? supabase.from('services').update(row).eq('id', state.editingServiceId)
-    : supabase.from('services').insert(row);
-  const { error } = await q;
-  if (error) return toast(error.message, 'err');
-  $('#svc-dialog').close();
-  toast('تم الحفظ');
+  if (!row.name) { toast('اكتب اسم الخدمة', 'err'); return false; }
+  const { error } = state.editingServiceId
+    ? await supabase.from('services').update(row).eq('id', state.editingServiceId)
+    : await supabase.from('services').insert(row);
+  if (error) { toast(error.message, 'err'); return false; }
   loadServices();
+  return true;
 });
 
-$('#svc-body').addEventListener('click', async (e) => {
+$('#svc-list').addEventListener('click', (e) => {
   const edit = e.target.closest('[data-edit-svc]');
-  const del = e.target.closest('[data-del-svc]');
-  if (edit) openServiceDialog(state.services.find((s) => s.id === edit.dataset.editSvc));
-  if (del && confirm('حذف الخدمة؟ المواعيد السابقة بتضل محفوظة.')) {
-    const { error } = await supabase.from('services').delete().eq('id', del.dataset.delSvc);
-    if (error) return toast(error.message, 'err');
-    loadServices();
-  }
+  if (edit) openServiceSheet(state.services.find((s) => s.id === edit.dataset.editSvc));
 });
-$('#svc-body').addEventListener('change', async (e) => {
+$('#svc-list').addEventListener('change', async (e) => {
   const id = e.target.dataset.toggleSvc;
   if (!id) return;
   await supabase.from('services').update({ active: e.target.checked }).eq('id', id);
@@ -358,44 +348,46 @@ async function loadStaff() {
     .eq('business_id', state.business.id).order('sort').order('created_at');
   if (error) return toast(error.message, 'err');
   state.staff = data;
-  $('#staff-body').innerHTML = data.map((s) => `<tr>
-      <td>${esc(s.name)}</td>
-      <td><input type="checkbox" data-toggle-staff="${s.id}" ${s.active ? 'checked' : ''} style="width:auto" /></td>
-      <td style="white-space:nowrap">
-        <button class="btn ghost sm" data-rename-staff="${s.id}">تغيير الاسم</button>
-        <button class="btn danger sm" data-del-staff="${s.id}">حذف</button>
-      </td></tr>`).join('');
+  $('#staff-list').innerHTML = data.map((s) => `<li><div class="row">
+      <button data-edit-staff="${s.id}" style="all:unset;cursor:pointer;flex:1;min-width:0">
+        <span${s.active ? '' : ' class="muted"'}>${esc(s.name)}</span>
+        ${s.active ? '' : '<span class="sub">مش ظاهر للزبائن</span>'}
+      </button>
+      <input type="checkbox" class="switch" data-toggle-staff="${s.id}" ${s.active ? 'checked' : ''} aria-label="يستقبل مواعيد: ${esc(s.name)}" />
+    </div></li>`).join('');
 }
 
-$('#add-staff').addEventListener('click', async () => {
-  const name = prompt('اسم الموظف:')?.trim();
-  if (!name) return;
-  const { error } = await supabase.from('staff').insert({ business_id: state.business.id, name });
-  if (error) return toast(error.message, 'err');
-  toast('تمت الإضافة — عدّل ساعات عمله من "ساعات العمل"');
-  loadStaff();
+function openStaffSheet(st) {
+  state.editingStaffId = st?.id || null;
+  $('#staff-title').textContent = st ? 'تعديل الموظف' : 'موظف جديد';
+  $('#staff-name').value = st?.name || '';
+  $('#staff-hint').hidden = !!st;
+  $('#staff-dialog').showModal();
+}
+$('#add-staff').addEventListener('click', () => openStaffSheet(null));
+$('#staff-list').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-edit-staff]');
+  if (b) openStaffSheet(state.staff.find((s) => s.id === b.dataset.editStaff));
 });
 
-$('#staff-body').addEventListener('click', async (e) => {
-  const ren = e.target.closest('[data-rename-staff]');
-  const del = e.target.closest('[data-del-staff]');
-  if (ren) {
-    const cur = state.staff.find((s) => s.id === ren.dataset.renameStaff);
-    const name = prompt('الاسم الجديد:', cur.name)?.trim();
-    if (!name) return;
-    await supabase.from('staff').update({ name }).eq('id', cur.id);
-    loadStaff();
-  }
-  if (del) {
-    if (state.staff.length <= 1) return toast('لازم يضل موظف واحد على الأقل', 'err');
-    if (!confirm('حذف الموظف؟ كل مواعيده رح تنحذف كمان. الأفضل تلغي تفعيله بدل الحذف.')) return;
-    await supabase.from('staff').delete().eq('id', del.dataset.delStaff);
-    loadStaff();
-  }
+sheet($('#staff-dialog'), $('#staff-form'), async () => {
+  const name = $('#staff-name').value.trim();
+  if (!name) { toast('اكتب اسم الموظف', 'err'); return false; }
+  const { error } = state.editingStaffId
+    ? await supabase.from('staff').update({ name }).eq('id', state.editingStaffId)
+    : await supabase.from('staff').insert({ business_id: state.business.id, name });
+  if (error) { toast(error.message, 'err'); return false; }
+  loadStaff();
+  return true;
 });
-$('#staff-body').addEventListener('change', async (e) => {
+
+$('#staff-list').addEventListener('change', async (e) => {
   const id = e.target.dataset.toggleStaff;
   if (!id) return;
+  if (!e.target.checked && state.staff.filter((s) => s.active).length <= 1) {
+    e.target.checked = true;
+    return toast('لازم يضل موظف واحد على الأقل يستقبل مواعيد', 'err');
+  }
   await supabase.from('staff').update({ active: e.target.checked }).eq('id', id);
   loadStaff();
 });
@@ -407,6 +399,7 @@ function renderHoursStaffSelect() {
   const sel = $('#hours-staff');
   const prev = sel.value;
   sel.innerHTML = state.staff.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  sel.hidden = state.staff.length < 2;
   if (prev && state.staff.some((s) => s.id === prev)) sel.value = prev;
   loadHours();
 }
@@ -418,20 +411,28 @@ async function loadHours() {
   const { data, error } = await supabase.from('working_hours').select('*').eq('staff_id', staffId);
   if (error) return toast(error.message, 'err');
   const byDay = Object.fromEntries(data.map((h) => [h.weekday, h]));
-  $('#hours-rows').innerHTML = DAYS.map((d, i) => {
+  // Week starts Saturday — how most local businesses think about it.
+  const order = [6, 0, 1, 2, 3, 4, 5];
+  $('#hours-rows').innerHTML = order.map((i) => {
     const h = byDay[i] || { is_open: false, start_time: '09:00', end_time: '18:00' };
-    return `<div class="hours-row" data-day="${i}">
-      <b>${d}</b>
-      <label style="margin:0"><input type="checkbox" class="h-open" ${h.is_open ? 'checked' : ''} /> مفتوح</label>
-      <input type="time" class="h-start" value="${h.start_time.slice(0, 5)}" />
-      <input type="time" class="h-end" value="${h.end_time.slice(0, 5)}" />
+    return `<div class="row${h.is_open ? '' : ' off'}" data-day="${i}">
+      <span class="day-name">${DAYS[i]}</span>
+      <input type="checkbox" class="switch h-open" ${h.is_open ? 'checked' : ''} aria-label="مفتوح يوم ${DAYS[i]}" />
+      <span class="times">
+        <input type="time" class="h-start" value="${h.start_time.slice(0, 5)}" aria-label="من" />
+        <span class="muted">–</span>
+        <input type="time" class="h-end" value="${h.end_time.slice(0, 5)}" aria-label="لـ" />
+      </span>
     </div>`;
   }).join('');
 }
+$('#hours-rows').addEventListener('change', (e) => {
+  if (e.target.classList.contains('h-open')) e.target.closest('.row').classList.toggle('off', !e.target.checked);
+});
 
 $('#save-hours').addEventListener('click', async (e) => {
   const staffId = $('#hours-staff').value;
-  const rows = $$('.hours-row').map((r) => ({
+  const rows = $$('#hours-rows .row').map((r) => ({
     staff_id: staffId,
     weekday: Number(r.dataset.day),
     is_open: $('.h-open', r).checked,
@@ -439,26 +440,32 @@ $('#save-hours').addEventListener('click', async (e) => {
     end_time: $('.h-end', r).value,
   }));
   const bad = rows.find((r) => r.is_open && r.end_time <= r.start_time);
-  if (bad) return toast(`ساعة الإغلاق لازم تكون بعد ساعة الفتح (${DAYS[bad.weekday]})`, 'err');
+  if (bad) return toast(`يوم ${DAYS[bad.weekday]}: ساعة الإغلاق لازم تكون بعد الفتح`, 'err');
 
-  setLoading(e.target, true);
+  setLoading(e.target, true, 'جارٍ الحفظ…');
   const { error } = await supabase.from('working_hours').upsert(rows);
   setLoading(e.target, false);
-  toast(error ? error.message : 'تم حفظ ساعات العمل', error ? 'err' : 'ok');
+  toast(error ? error.message : 'انحفظت الساعات', error ? 'err' : 'ok');
 });
 
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
+function setSelect(sel, value) {
+  const v = String(value);
+  if (![...sel.options].some((o) => o.value === v)) sel.add(new Option(v, v));
+  sel.value = v;
+}
+
 function fillSettings() {
   const b = state.business;
   $('#s-name').value = b.name;
   $('#s-phone').value = b.phone ? '0' + b.phone.slice(4) : '';
   $('#s-address').value = b.address || '';
   $('#s-desc').value = b.description || '';
-  $('#s-interval').value = b.slot_interval_min;
-  $('#s-notice').value = b.min_notice_min;
-  $('#s-days').value = b.max_days_ahead;
+  setSelect($('#s-interval'), b.slot_interval_min);
+  setSelect($('#s-notice'), b.min_notice_min);
+  setSelect($('#s-days'), b.max_days_ahead);
   $('#s-wa').checked = b.whatsapp_enabled;
   $('#s-notify').checked = b.notify_owner;
 }
@@ -467,9 +474,11 @@ $('#settings-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const rawPhone = $('#s-phone').value.trim();
   const phone = rawPhone ? normalizePhone(rawPhone) : null;
-  if (rawPhone && !phone) return toast('رقم الجوال غير صحيح', 'err');
+  if (rawPhone && !phone) return toast('رقم الجوال مش صحيح. مثال: 0501234567', 'err');
 
-  const patch = {
+  const btn = e.submitter;
+  setLoading(btn, true, 'جارٍ الحفظ…');
+  const { data, error } = await supabase.from('businesses').update({
     name: $('#s-name').value.trim(),
     phone,
     address: $('#s-address').value.trim() || null,
@@ -479,11 +488,16 @@ $('#settings-form').addEventListener('submit', async (e) => {
     max_days_ahead: Number($('#s-days').value),
     whatsapp_enabled: $('#s-wa').checked,
     notify_owner: $('#s-notify').checked,
-  };
-  const { data, error } = await supabase.from('businesses').update(patch)
-    .eq('id', state.business.id).select().single();
+  }).eq('id', state.business.id).select().single();
+  setLoading(btn, false);
   if (error) return toast(error.message, 'err');
   state.business = data;
   $('#biz-name').textContent = data.name;
-  toast('تم حفظ الإعدادات');
+  toast('انحفظت الإعدادات');
 });
+
+// ---------------------------------------------------------------------------
+// Start — last, so every const/function above is initialised first.
+// ---------------------------------------------------------------------------
+state.session = await requireSession();
+if (state.session) await boot();
