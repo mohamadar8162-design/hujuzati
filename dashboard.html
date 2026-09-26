@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>حجوزاتي</title>
-  <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#F2F4F5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0E1113" media="(prefers-color-scheme: dark)" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" />
@@ -123,6 +123,16 @@
       <section class="tab" id="tab-settings" hidden>
         <div class="main-head"><h1 class="large-title">الإعدادات</h1></div>
         <form id="settings-form">
+          <p class="section-label">صورة الغلاف</p>
+          <div class="group">
+            <div class="row cover-row">
+              <img class="thumb" id="cover-thumb" alt="" hidden />
+              <span class="grow">صورة لمحلك<span class="sub">بتظهر فوق صفحة الحجز. أفضل صورة عرضية للمحل من جوّا.</span></span>
+              <label class="btn small gray" for="cover-file" style="cursor:pointer">اختيار صورة</label>
+              <input id="cover-file" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+            </div>
+          </div>
+
           <p class="section-label">المصلحة</p>
           <div class="group">
             <div class="row field-row"><label for="s-name">الاسم</label><input id="s-name" maxlength="80" required /></div>
